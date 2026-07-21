@@ -8,10 +8,12 @@
 #include <stdio.h>
 #include <linmath.h>
 #include <stdlib.h>
+#include <float.h>
 
 #include "gameutil.h"
 
 
+// body buffer
 
 
 // temp variables
@@ -21,33 +23,60 @@ int wasd[5] = {0};
 
 
 /*
-make a vertex buffer fron an array of floats
-this causes a crash?
+TODO: calculate the bounding box of the object.
 */
-body* initBody(float vertices_array[], int arr_len, float xpos, float ypos)
+body* initBody(float vertices_array[], enum bodyType type, int arr_len, float xpos, float ypos)
 {
-    body* bodyPtr = malloc(sizeof(body));
+    body* bodyPtr = calloc(1, sizeof(body)); // set all variables to 0
 
     bodyPtr->vertices = malloc(sizeof(float) * arr_len);
     memcpy(bodyPtr->vertices, vertices_array, arr_len * sizeof(float));
-    
+    bodyPtr->vertexBuffer = buildVertexBuffer(bodyPtr->vertices, arr_len);
+
     bodyPtr->vertCount = arr_len;
-    bodyPtr->pos[0] = xpos;
-    bodyPtr->pos[1] = ypos;
-    bodyPtr->speed[0] = 0.0;
-    bodyPtr->speed[1] = 0.0;
-    bodyPtr->accel[0] = 0.0;
-    bodyPtr->accel[1] = 0.0;
+    bodyPtr->type = type;
+
+    // set bounding box
+    bodyPtr->bounds = bodyBounds(bodyPtr);
 
     printBody(bodyPtr);
 
     return bodyPtr;
 }
 
-void freeBody(body* bodyIn)
+/* creates a bounding box */
+rect2D bodyBounds(body* b)
 {
-    free(bodyIn->vertices);
-    free(bodyIn);
+    rect2D ret;
+    float minX = FLT_MAX, minY = FLT_MAX;
+    float maxX = -FLT_MAX, maxY = -FLT_MAX;
+
+    for(int i = 0; i < b->vertCount; i++)
+    {
+        if(i % 2 == 0) // for x vertices
+        {
+            minX = fminf(b->vertices[i], minX);
+            maxX = fmaxf(b->vertices[i], maxX);
+        }
+        else // for y vertices
+        {
+            minY = fminf(b->vertices[i], minY);
+            maxY = fmaxf(b->vertices[i], maxY);
+        }
+    }
+
+    ret.x = minX;
+    ret.y = minY;
+    ret.w = maxX - minX;
+    ret.h = maxY - minY;
+
+    return ret;
+}
+
+void freeBody(body* b)
+{
+    free(b->vertices);
+    free(b);
 }
 
 void printBody(body* bodyPtr)
@@ -58,16 +87,117 @@ void printBody(body* bodyPtr)
         printf("%f, ", bodyPtr->vertices[i]);
     }
     printf("\nvertCt:\t%d\n", bodyPtr->vertCount);
-    printf("pos:\t%f, %f\n", bodyPtr->pos[0], bodyPtr->pos[1]);
-    printf("speed:\t%f, %f\n", bodyPtr->speed[0], bodyPtr->speed[1]);
-    printf("accel:\t%f, %f\n", bodyPtr->accel[0], bodyPtr->accel[1]);
-
+    printf("bounds:\t%f, %f, %f, %f\n", bodyPtr->bounds.x, bodyPtr->bounds.y, bodyPtr->bounds.w, bodyPtr->bounds.h);    
+    printf("pos:\t%f, %f\n", bodyPtr->posX, bodyPtr->posY);
+    printf("speed:\t%f, %f\n", bodyPtr->speedX, bodyPtr->speedY);
+    printf("accel:\t%f, %f\n", bodyPtr->accelX, bodyPtr->accelY);
 }
 
+void cmdLnUp(int count)
+{
+    for(int i = 0; i < count; i++)
+    {   
+        // change this if the number of lines in printBody chanes
+        printf("\033[F");
+    }
+    fflush(stdout);
+}
 
+bodyList* initBodyList()
+{
+    bodyList* list = malloc(sizeof(bodyList));
+    list->end = 0;
+    list->size = BL_DEFAULT_LEN;
+    list->bodies[0] = NULL;
+    return list;
+}
 
+/*
+TODO: add auto resizing and auto remove
+    empty slots from removed bodies.
+*/
+int bodyListAdd(bodyList* list, body* bodyAdd)
+{
+    // if unitialized
+    if(list->bodies[0] == NULL)
+    {
+        list->bodies[0] = bodyAdd;
+    }
+    else if(list->end + 1 < list->size)
+    {
+        list->end++;
+        list->bodies[list->end] = bodyAdd;
+        return 0;
+    }
+    else
+    {
+        printf("Body List Full, make it dynamic lol");
+        return -1;
+    }
+}
 
+/*
+if a body is coliding with a plat, mate the edges of the bounds.
+detect which direction to correct in
 
+TODO: add a case for when the body side is not embedded in area of the plat
+        re-write using simpler overlaps?
+        re-write with variables TL,TR.. (top Left, top Right..)
+*/
+int bodyPlatColision(body* b, body* plat)
+{
+    float newBoundsX = b->bounds.x;
+    float newBoundsY = b->bounds.y;
+
+    // check if theres a collision first
+    if ( !(b->bounds.x < plat->bounds.x + plat->bounds.w &&
+        b->bounds.x + b->bounds.w > plat->bounds.x &&
+        b->bounds.y < plat->bounds.y + plat->bounds.h &&
+        b->bounds.y + b->bounds.h > plat->bounds.y))
+    {
+        return 0;
+    }
+
+   
+    return 1;
+}
+
+/* incemental move of the body and its bounds*/
+void imvBody(body* b, float x, float y)
+{
+    b->bounds.x += x;
+    b->bounds.y += y;
+    b->posX += x;
+    b->posY += y;
+}
+
+/* absolute move of the body about the posx/y. */
+void mvBody(body* b, float x, float y)
+{
+    // find the difference between where we are and where were going
+    double xDiff = (double)x - (double)b->posX;
+    double yDiff = (double)y - (double)b->posY;
+
+    // add this difference incremental style
+    b->bounds.x += xDiff;
+    b->bounds.y += yDiff;
+    b->posX += xDiff;
+    b->posY += yDiff;
+}
+
+/* absolute move of the body about the x/y of the bounds*/
+void mvBodyBounds(body* b, float x, float y)
+{
+    // find the difference between where we are and where were going
+    double xDiff = (double)x - (double)b->bounds.x;
+    double yDiff = (double)y - (double)b->bounds.y;
+
+    // add this difference incremental style
+    b->bounds.x += xDiff;
+    b->bounds.y += yDiff;
+    b->posX += xDiff;
+    b->posY += yDiff;
+}
 
 /*
 clamp float between min and max
@@ -78,72 +208,19 @@ float fclamp(float input, float max, float min)
 }
 
 
-
 /*
-creates a string with the contents of a file
+creates a filled vertex buffer in VRAM and then returns a handle to it.
 */
-const char* loadFile(char* filename) {
-    FILE* fp = fopen(filename, "rb"); // Open file in binary read mode
-    char* buffer = NULL;
-    long filesize = 0;
-
-    if (!fp) {
-        fprintf(stderr, "Failed to open file: %s\n", filename);
-        return NULL;
-    }
-
-    // Go to the end of the file to get the size
-    if (fseek(fp, 0L, SEEK_END) == 0) {
-        filesize = ftell(fp);
-        if (filesize == -1) {
-            perror("ftell error");
-            fclose(fp);
-            return NULL;
-        }
-
-        // Allocate memory for the buffer (+1 for null terminator)
-        buffer = (char*)malloc(sizeof(char) * (filesize + 1));
-        if (!buffer) {
-            fprintf(stderr, "loadFile() Memory allocation failed\n");
-            fclose(fp);
-            return NULL;
-        }
-
-        // Go back to the start of the file
-        rewind(fp);
-
-        // Read the entire file into memory
-        size_t newLen = fread(buffer, sizeof(char), (size_t)filesize, fp);
-        if (ferror(fp) != 0) {
-            fprintf(stderr, "loadFile() Error reading file\n");
-            free(buffer);
-            fclose(fp);
-            return NULL;
-        } else {
-            buffer[newLen] = '\0'; // Ensure null-termination
-        }
-    }
-
-    fclose(fp);
-    return buffer; // Caller is responsible for freeing the memory
-}
-
-
-
-/*
-creates a single array vertex array buffer handle
-TODO: make the size of the vertex array automatically fit the input array
-*/
-GLuint buildVertexBuffer(const float vertices[])
+GLuint buildVertexBuffer(const float vertices[], size_t size)
 {
     GLuint vertex_buffer;
     glGenBuffers(1, &vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6, vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * size, vertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     return vertex_buffer;
 }
-
 
 
 /*
@@ -156,7 +233,6 @@ const GLuint buildVertexShader(const char* vertex_shader_text)
     glCompileShader(vertex_shader);
     return vertex_shader;
 }
-
 
 
 /*
@@ -220,125 +296,105 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
 }
 
-void addFriction(body* body)
-{
-    // tp prevent drifting
-    if(body->speed[0] < FRICTION && body->speed[0] > FRICTION * -1.0)
-        body->speed[0] = 0.0;
-
-    if(body->speed[1] < FRICTION && body->speed[1] > FRICTION * -1.0)
-        body->speed[1] = 0.0;
-
-
-    // slows down speed by the FRICTION modifier
-    if(body->speed[0] > FRICTION)
-        body->speed[0] -= FRICTION;
-
-    if(body->speed[0] < FRICTION * -1.0)
-        body->speed[0] += FRICTION;
-
-    if (body->speed[0] > FRICTION && body->speed[0] < FRICTION * -1.0)
-        body->speed[0] = 0;
-
-    if(body->speed[1] > FRICTION)
-        body->speed[1] -= FRICTION;
-
-    if(body->speed[1] < FRICTION * -1)
-        body->speed[1] += FRICTION;
-
-    if (body->speed[1] > FRICTION * 2 && body->speed[0] < FRICTION * -1.0)
-        body->speed[1] = 0;
-}
 
 void processKeyboardInputs(body* body)
 {   
-    body->accel[1] += MOVE_MULT * wasd[0];
-    body->accel[0] += MOVE_MULT * wasd[1] * -1;
-    body->accel[1] += MOVE_MULT * wasd[2] * -1;
-    body->accel[0] += MOVE_MULT * wasd[3];
+    body->accelY += MOVE_MULT * wasd[0];
+    body->accelX += MOVE_MULT * wasd[1] * -1;
+    body->accelY += MOVE_MULT * wasd[2] * -1;
+    body->accelX += MOVE_MULT * wasd[3];
 
 
     // no accelleration without inputs
     if(!wasd[0] && !wasd[2] || wasd[0] && wasd[2])
-        body->accel[1] = 0.0;
+        body->accelY = 0.0;
 
     if(!wasd[1] && !wasd[3] || wasd[1] && wasd[3])
-        body->accel[0] = 0.0;
+        body->accelX = 0.0;
 
     // jump
     if(wasd[5] == 1)
     {
-        body->accel[1] += 0.015;
+        body->accelY += 0.1;
         wasd[5] = 0;
     }
 }
 
-void limitSpeed(body* body)
+void runPhy(body* body)
 {
-    //speed limit
-    body->speed[0] = fclamp(body->speed[0], MAXSPEED, MAXSPEED * -1.0);
-    body->speed[1] = fclamp(body->speed[1], MAXSPEED, MAXSPEED * -1.0);
-}
+    body->speedX += body->accelX;
+    body->speedY += body->accelY;
 
-void limitAccel(body* body)
-{
-    body->accel[0] = fclamp(body->accel[0], MAXACCEL, MAXACCEL * -1.0);
-    body->accel[1] = fclamp(body->accel[1], MAXACCEL, MAXACCEL * -1.0);
-}
+    body->posX += body->speedX;
+    body->posY += body->speedY;
 
-
-
-void addGravity(body* body)
-{
-    body->accel[1] -= GRAVITY;
-}
-
-/*
-directly modifies the body given
-*/
-void boundCheck(body* body)
-{
-    float *transformVec = body->pos;
-
-    if(transformVec[0] > 1.0)
-    {
-        body->pos[0] = 1.0;
-        body->speed[0] = 0.0;
-        body->accel[0] = 0.0;     
-    }
-
-
-    if(transformVec[0] < -1.0)
-    {
-        body->pos[0] = -1.0;
-        body->speed[0] = 0.0;
-        body->accel[0] = 0.0;
-    }
-
-
-    if(transformVec[1] > 1.0)
-    {
-        body->pos[1] = 1.0;
-        body->speed[1] = 0.0;
-        body->accel[1] = 0.0;
-
-    }
-    
-    if(body->pos[1] < -1.0)
-    {
-        body->pos[1] = -1.0;
-        body->speed[1] = 0.0;   // if you hit the bottom bound arrest your accelleration
-        body->accel[1] = 0.0;
-    }
+    body->bounds.x += body->speedX;
+    body->bounds.y += body->speedY;
 }
 
 
 void runBody(body* body)
 {
-    processKeyboardInputs(body);
-    boundCheck(body);
-    addFriction(body);
-    addGravity(body);
-    limitSpeed(body);
-    limitAccel(body);
+    printBody(body);
+
+    // process movment
+    if(body->type == BODY)
+    {
+        processKeyboardInputs(body);
+        //addGravity(body);
+        // update the movment before all the mods are applied
+        runPhy(body);
+        // add friction while on platforms later on
+    }
+ 
+}
+
+
+/*
+creates a string with the contents of a file
+*/
+const char* loadFile(char* filename) {
+    FILE* fp = fopen(filename, "rb"); // Open file in binary read mode
+    char* buffer = NULL;
+    long filesize = 0;
+
+    if (!fp) {
+        fprintf(stderr, "Failed to open file: %s\n", filename);
+        return NULL;
+    }
+
+    // Go to the end of the file to get the size
+    if (fseek(fp, 0L, SEEK_END) == 0) {
+        filesize = ftell(fp);
+        if (filesize == -1) {
+            perror("ftell error");
+            fclose(fp);
+            return NULL;
+        }
+
+        // Allocate memory for the buffer (+1 for null terminator)
+        buffer = (char*)malloc(sizeof(char) * (filesize + 1));
+        if (!buffer) {
+            fprintf(stderr, "loadFile() Memory allocation failed\n");
+            fclose(fp);
+            return NULL;
+        }
+
+        // Go back to the start of the file
+        rewind(fp);
+
+        // Read the entire file into memory
+        size_t newLen = fread(buffer, sizeof(char), (size_t)filesize, fp);
+        if (ferror(fp) != 0) {
+            fprintf(stderr, "loadFile() Error reading file\n");
+            free(buffer);
+            fclose(fp);
+            return NULL;
+        } else {
+            buffer[newLen] = '\0'; // Ensure null-termination
+        }
+    }
+
+    fclose(fp);
+    return buffer; // Caller is responsible for freeing the memory
 }

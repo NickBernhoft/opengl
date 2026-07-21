@@ -11,7 +11,6 @@
 
 static const char* vertex_shader_text;
 static const char* fragment_shader_text;
-const GLuint vertex_shader;
 
 
 
@@ -31,21 +30,12 @@ float plat[] =
     0.6, -0.6,
     0.6, -0.5,
     -0.6, -0.5 
-
 };
  
 
 
 int main(void)
 {
-
-    // init bodies
-    body* triangle_body;
-    triangle_body = initBody(vertices, 6, 0.0, 0.0);
-
-    body* plat_body;
-    plat_body = initBody(plat, 12, 0.0, 0.0);
-
     int width = 640;
     int height = 480;
 
@@ -55,7 +45,7 @@ int main(void)
         printf("error in GLFW init :(\n");
     }
  
-    GLFWwindow* window = glfwCreateWindow(width, height, "OpenGL tester", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(width, height, "PLAT", NULL, NULL);
     if (!window)
     {
         printf("error creating window :(\n");
@@ -69,67 +59,105 @@ int main(void)
     glfwSwapInterval(1); // v-sync
 
 
-    // load shaders
-    vertex_shader_text = loadFile("vertex_shader.vs");
-    fragment_shader_text = loadFile("fragment_shader.fs");
+    // load shaders (embedded)
+    vertex_shader_text = (const char[]){
+    #embed "shaders/vertex_shader.vs" // #emebd must have its own line 
+        , 0
+    };
 
-    printf("testing file reads:\n");
-    printf("%s\n\n", vertex_shader_text);
-    printf("%s\n\n", fragment_shader_text);
+    fragment_shader_text = (const char[]){
+    #embed "shaders/fragment_shader.fs"
+        , 0
+    };
 
 
+    /*actual OpenGL code*/
 
 
-    // actual OpenGL code
+    //using a global program for now
 
     // making the program
-    GLuint vertex_buffer = buildVertexBuffer(triangle_body->vertices);
     const GLuint vertex_shader = buildVertexShader(vertex_shader_text);
     const GLuint fragment_shader = buildFragmentShader(fragment_shader_text);
+
     const GLuint program = buildProgram(vertex_shader, fragment_shader);
 
-    // setting the uniforms
+    // setting the uniform handles
     const GLint transformVec_location = glGetUniformLocation(program, "transformVec");
     const GLint colorVec_location = glGetUniformLocation(program, "colorVec");
     const GLint vpos_location = glGetAttribLocation(program, "vPos");
-    // attributes are the buffered data going into the shaders
+    // attributes are the buffered data that the shaders do their math on
 
-    //vertex array to be rendered
+
+    // use global vertex array for now
+    //define how the format that the shader will interpruit the buffered data in
     GLuint vertex_array;
     glGenVertexArrays(1, &vertex_array);
     glBindVertexArray(vertex_array);
     glEnableVertexAttribArray(vpos_location);
-    glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 
+
+    // init bodies
+    body* triangle_body;
+    triangle_body = initBody(vertices, BODY, 6, 0.0, 0.0);
+
+    body* plat_body;
+    plat_body = initBody(plat, PLAT, 12, 0.0, 0.0);
+
+    // list of bodies to be rendered
+    bodyList* renderBodies = initBodyList();
+    bodyListAdd(renderBodies, triangle_body);
+    bodyListAdd(renderBodies, plat_body);
+
+
+
+
+    // pre loop settings
+    glUseProgram(program);
+    glBindVertexArray(vertex_array);
 
     int count = 0; 
     while (!glfwWindowShouldClose(window))
     {
-        printf("Hello :D %d\n", count);
+        printf("Frame: %d\n", count);
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT); // black background
         glfwPollEvents();
 
-        // update stuff changed by inputs right before drawing the frame
-        runBody(triangle_body);
+   
+        // render all bodies in the list
+        int i;
+        cmdLnUp(8 * 2);
+        for(i = 0; i <= renderBodies->end; i++)
+        {
+            body* curBody = renderBodies->bodies[i];
 
-        // main loop code
+            runBody(curBody);
 
-        
-        // triangle body shader
-        glUseProgram(program);
-        glUniform2fv(transformVec_location, 1, triangle_body->pos);
-        glUniform3f(colorVec_location, 1.0f, 1.0f, 1.0f); // tirangle fill color
+            // temporairly doing the hit detection manually
+            int paltCol = bodyPlatColision(triangle_body, plat_body);
+            if (paltCol != 0) {printf("plat Body Collision");}
 
-        glBindVertexArray(vertex_array);
-        glDrawArrays(GL_TRIANGLES, 0, triangle_body->vertCount / 2); // execute the shader + pipeline
+            //bind VBO
+            glBindBuffer(GL_ARRAY_BUFFER, curBody->vertexBuffer);
+            // sets VAO to use current VBO
+            glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+            glUniform2fv(transformVec_location, 1, (float[2]){curBody->posX, curBody->posY});
+            glUniform3f(colorVec_location, 1.0f, 1.0f, 1.0f); // tirangle fill color
+            glDrawArrays(GL_TRIANGLES, 0, curBody->vertCount / 2);
+        }
+
+
+
+
 
 
         glfwSwapBuffers(window); // display frame
         count++;
-        glfwPollEvents();
     }
 
 
