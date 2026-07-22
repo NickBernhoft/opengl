@@ -18,6 +18,15 @@ enum bodyType : uint8_t
 	PLAT = 1
 };
 
+enum movmentType : uint8_t
+{
+	POS,
+	SPEED,
+	ACCEL
+};
+
+extern enum movmentType mov_type;
+
 typedef struct rect2D { float x, y, w, h; } rect2D;
 
 
@@ -49,6 +58,10 @@ typedef struct bodyList
 }bodyList;
 
 
+
+
+
+
 /*Function prototypes*/
 float fclamp(float input, float max, float min);
 const char* loadFile(char* filename);
@@ -77,11 +90,6 @@ void mvBody(body* b, float x, float y);
 void mvBodyBounds(body* b, float x, float y);
 
 void processKeyboardInputs(body* body);
-void boundCheck(body* body);
-void addFriction(body* body);
-void addGravity(body* body);
-void limitSpeed(body* body);
-void limitAccel(body* body);
 void runBody(body* body);
 void runPhy(body* body);
 

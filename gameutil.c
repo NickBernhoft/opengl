@@ -18,6 +18,7 @@
 
 // temp variables
 int wasd[5] = {0};
+enum movmentType mov_type = SPEED; // default to non accelleration based movment
 
 
 
@@ -136,14 +137,7 @@ int bodyListAdd(bodyList* list, body* bodyAdd)
     }
 }
 
-/*
-if a body is coliding with a plat, mate the edges of the bounds.
-detect which direction to correct in
-
-TODO: add a case for when the body side is not embedded in area of the plat
-        re-write using simpler overlaps?
-        re-write with variables TL,TR.. (top Left, top Right..)
-*/
+/* TODO */
 int bodyPlatColision(body* b, body* plat)
 {
     float newBoundsX = b->bounds.x;
@@ -275,10 +269,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 
     // wasd movment
-    if(key == GLFW_KEY_W && action == GLFW_PRESS) // set key status pressed
-        wasd[0] = 1;
-    if(key == GLFW_KEY_W && action == GLFW_RELEASE) // set key status empty
-        wasd[0] = 0;
+    if(key == GLFW_KEY_W && action == GLFW_PRESS)   wasd[0] = 1;
+    if(key == GLFW_KEY_W && action == GLFW_RELEASE) wasd[0] = 0;
 
     if(key == GLFW_KEY_A && action == GLFW_PRESS)   wasd[1] = 1;
     if(key == GLFW_KEY_A && action == GLFW_RELEASE) wasd[1] = 0;
@@ -297,26 +289,35 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 
-void processKeyboardInputs(body* body)
+void processKeyboardInputs(body* b)
 {   
-    body->accelY += MOVE_MULT * wasd[0];
-    body->accelX += MOVE_MULT * wasd[1] * -1;
-    body->accelY += MOVE_MULT * wasd[2] * -1;
-    body->accelX += MOVE_MULT * wasd[3];
-
-
-    // no accelleration without inputs
-    if(!wasd[0] && !wasd[2] || wasd[0] && wasd[2])
-        body->accelY = 0.0;
-
-    if(!wasd[1] && !wasd[3] || wasd[1] && wasd[3])
-        body->accelX = 0.0;
-
-    // jump
-    if(wasd[5] == 1)
+    if(mov_type == SPEED)
     {
-        body->accelY += 0.1;
-        wasd[5] = 0;
+        b->speedX = MOVE_MULT * (wasd[3] - wasd[1]);
+        b->speedY = MOVE_MULT * (wasd[0] - wasd[2]);
+    }
+
+    if(mov_type == ACCEL)
+    {
+        b->accelY += MOVE_MULT * wasd[0];
+        b->accelX += MOVE_MULT * wasd[1] * -1;
+        b->accelY += MOVE_MULT * wasd[2] * -1;
+        b->accelX += MOVE_MULT * wasd[3];
+
+
+        // no accelleration without inputs
+        if(!wasd[0] && !wasd[2] || wasd[0] && wasd[2])
+            b->accelY = 0.0;
+
+        if(!wasd[1] && !wasd[3] || wasd[1] && wasd[3])
+            b->accelX = 0.0;
+
+        // jump
+        if(wasd[5] == 1)
+        {
+            b->accelY += 0.1;
+            wasd[5] = 0;
+        }
     }
 }
 
@@ -341,10 +342,7 @@ void runBody(body* body)
     if(body->type == BODY)
     {
         processKeyboardInputs(body);
-        //addGravity(body);
-        // update the movment before all the mods are applied
         runPhy(body);
-        // add friction while on platforms later on
     }
  
 }
