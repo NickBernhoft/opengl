@@ -152,7 +152,8 @@ int bodyPlatColision(body* b, body* plat)
         return 0;
     }
 
-   
+    //movement code here
+
     return 1;
 }
 
@@ -281,8 +282,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if(key == GLFW_KEY_D && action == GLFW_PRESS)   wasd[3] = 1;
     if(key == GLFW_KEY_D && action == GLFW_RELEASE) wasd[3] = 0;
 
-    if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)   wasd[5] = 1;
-    if(key == GLFW_KEY_SPACE && action == GLFW_RELEASE) wasd[5] = 0;
+    if(key == GLFW_KEY_SPACE && action == GLFW_PRESS)   wasd[4] = 1;
+    if(key == GLFW_KEY_SPACE && action == GLFW_RELEASE) wasd[4] = 0;
 
 
 
@@ -313,10 +314,10 @@ void processKeyboardInputs(body* b)
             b->accelX = 0.0;
 
         // jump
-        if(wasd[5] == 1)
+        if(wasd[4] == 1)
         {
             b->accelY += 0.1;
-            wasd[5] = 0;
+            wasd[4] = 0;
         }
     }
 }
