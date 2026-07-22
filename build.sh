@@ -3,8 +3,8 @@ echo "building for UNIX"
 rm opengl
 
 # gcc -I ./include opengl.c gameutil.c glad.c libglfw3_macos_universal.a -o "opengl" -lgdi -lopengl -luser
+# gcc -I ./include opengl.c gameutil.c include/glad/glad.c libglfw3_macos_universal.a -o "opengl" -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
 clang -I ./include opengl.c gameutil.c include/glad/glad.c libglfw3_macos_universal.a -o "opengl" -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw3 -ldl
-
 
 wait
 
@@ -12,6 +12,7 @@ wait
 if [ -f ./opengl ]; then
 	echo "compiled successfully!" & 
 	./opengl
+fi
 
 echo "Finished"
 

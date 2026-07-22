@@ -11,6 +11,7 @@ wait
 if [ -f ./opengl ]; then
 	echo "compiled successfully!" & 
 	./opengl
+fi
 
 echo "Finished"
 
